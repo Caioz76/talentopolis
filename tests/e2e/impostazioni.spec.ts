@@ -254,7 +254,7 @@ test.describe('Impostazioni BES', () => {
     expect(await toccaTesto(page, 'Torna al menu')).toBe(true);
 
     expect(await toccaTesto(page, 'Bisogni Educativi Speciali')).toBe(true);
-    expect(await toccaTesto(page, 'Personalizza Caratteristiche')).toBe(true);
+    expect(await toccaTesto(page, 'Personalizza (Custom)')).toBe(true);
     await verificaNessunaSovrapposizione('Settings (regole)');
     expect(await toccaTesto(page, 'Torna ai profili')).toBe(true);
     expect(await toccaTesto(page, 'Torna al menu')).toBe(true);

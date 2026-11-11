@@ -61,6 +61,8 @@ export class OrderChallenge implements Challenge {
   private locked = false;
   private revealed = false;
   private checking = false;
+  /** Vero mentre un trascinamento vero (oltre la soglia) è in corso o si sta concludendo. */
+  private trascinamentoInCorso = false;
   private timers: Phaser.Time.TimerEvent[] = [];
 
   private promptText: Phaser.GameObjects.Text;
@@ -83,14 +85,20 @@ export class OrderChallenge implements Challenge {
     this.n = this.items.length;
 
     // ── Layout: chip adattive, al massimo 256 ──
-    const avail = 1024 - 112;
+    // A sinistra (fino a ~160 px logici) in orizzontale sta la barra HTML
+    // Pausa/Esci: la fila resta tra MARGINE_SX e MARGINE_DX, centrata quando
+    // c'è posto e spostata a destra quando le tessere sono tante (5-6).
+    const MARGINE_SX = 162;
+    const MARGINE_DX = 1016;
+    const avail = MARGINE_DX - MARGINE_SX;
     this.slotW = Math.min(
       256,
-      Math.max(120, Math.floor((avail - (this.n - 1) * GAP) / Math.max(1, this.n)))
+      Math.max(100, Math.floor((avail - (this.n - 1) * GAP) / Math.max(1, this.n)))
     );
     const cx = scene.scale.gameSize.width / 2;
     const total = this.n * this.slotW + (this.n - 1) * GAP;
-    const x0 = cx - total / 2 + this.slotW / 2;
+    const inizio = Math.max(MARGINE_SX, Math.min(cx - total / 2, MARGINE_DX - total));
+    const x0 = inizio + this.slotW / 2;
     this.xs = Array.from({ length: this.n }, (_, i) => x0 + i * (this.slotW + GAP));
 
     // ── Prompt / hint / istruzione ──
@@ -184,6 +192,9 @@ export class OrderChallenge implements Challenge {
 
   private onChipTap(chip: Chip): void {
     if (this.locked || this.checking) return;
+    // Il rilascio di un trascinamento fa scattare anche `pointerup` sulla
+    // tessera: non è un tocco, lo gestisce `enableDrag`.
+    if (this.trascinamentoInCorso) return;
     synth.play('click');
     const s = this.slotIndex(chip);
     if (s >= 0) {
@@ -217,6 +228,7 @@ export class OrderChallenge implements Challenge {
       const onMove = (pe: Phaser.Input.Pointer) => {
         if (!trascinato && Math.hypot(pe.x - startX, pe.y - startY) < SOGLIA) return;
         trascinato = true;
+        this.trascinamentoInCorso = true;
         root.setPosition(pe.x, pe.y);
       };
       let done = false;
@@ -231,7 +243,12 @@ export class OrderChallenge implements Challenge {
           root.setDepth(wasInSlot ? 21 : 20);
           return;
         }
-        const s = this.slotAt(pe.x, pe.y);
+        // Il `pointerup` della tessera può arrivare subito dopo: resta
+        // "in trascinamento" fino al prossimo giro, così non conta come tocco.
+        this.scene.time.delayedCall(0, () => {
+          this.trascinamentoInCorso = false;
+        });
+        const s = this.locked || this.checking ? -1 : this.slotAt(pe.x, pe.y);
         if (s !== -1) {
           synth.play('drop');
           this.moveToSlot(chip, s);
@@ -290,6 +307,12 @@ export class OrderChallenge implements Challenge {
     if (pi >= 0) {
       this.poolLabels[pi] = null;
       this.poolChips[pi] = null;
+    }
+    // ...e dallo slot precedente, se la tessera era già piazzata (drag slot→slot)
+    const prev = this.slotIndex(chip);
+    if (prev >= 0 && prev !== s) {
+      this.slots[prev] = null;
+      this.slotChips[prev] = null;
     }
     this.slots[s] = label;
     this.slotChips[s] = chip;

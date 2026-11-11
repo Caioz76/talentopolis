@@ -112,7 +112,7 @@ test.describe('Mobile portrait alignment and typography', () => {
     await page.locator('#mobile-deck button:has-text("Impostazioni")').click();
     await page.locator('#mobile-deck button:has-text("Bisogni Educativi Speciali (BES)")').click();
     await page.locator('#mobile-deck button:has-text("Dislessia")').click();
-    await page.locator('#mobile-deck button:has-text("Personalizza Caratteristiche")').click();
+    await page.locator('#mobile-deck button:has-text("Personalizza (Custom)")').click();
 
     // Check that toggle list has all toggles
     const toggles = page.locator('#mobile-deck .m-toggle-row');

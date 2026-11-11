@@ -441,6 +441,21 @@ export function ensureUI(scene: Phaser.Scene): void {
   make('btn-gray', 260, 52, (ctx) =>
     button(ctx, 260, 52, '#ffffff', '#eef3f8', '#dce4ee', '#9eb0c4', 'rgba(95, 113, 134, 0.04)')
   );
+  // Bottoni "risposta lunga": più larghi e alti (3 righe di testo), con gli
+  // stessi stati dei bottoni normali. Li usano le prove a scelta quando una
+  // risposta è troppo lunga per il bottone standard da 260×52.
+  make('btn-ans-blue', 400, 76, (ctx) =>
+    button(ctx, 400, 76, '#ffffff', '#eaf6ff', '#d0ebff', '#00a2e8', 'rgba(0, 162, 232, 0.045)')
+  );
+  make('btn-ans-green', 400, 76, (ctx) =>
+    button(ctx, 400, 76, '#2dc766', '#1ca64e', '#13833b', '#0b5424', 'rgba(11, 84, 36, 0.08)')
+  );
+  make('btn-ans-red', 400, 76, (ctx) =>
+    button(ctx, 400, 76, '#fff0f0', '#ff9696', '#e65555', '#c22e2e', 'rgba(194, 46, 46, 0.05)')
+  );
+  make('btn-ans-gray', 400, 76, (ctx) =>
+    button(ctx, 400, 76, '#ffffff', '#eef3f8', '#dce4ee', '#9eb0c4', 'rgba(95, 113, 134, 0.04)')
+  );
   make('panel', 700, 480, (ctx) => panel(ctx, 700, 480));
   make('star', 48, 48, (ctx) => star(ctx, 48));
   make('heart', 48, 48, (ctx) => heart(ctx, 48));

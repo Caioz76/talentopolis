@@ -753,6 +753,13 @@ body[data-scena="Game"] #mobile-deck {
   padding-top: calc(env(safe-area-inset-top, 0px) + 64px);
 }
 
+/* La scheda non si comprime all'altezza dello schermo: se la prova è lunga
+   (telefono piccolo, testo grande, tante tessere) si scorre, e le ultime
+   tessere non finiscono sotto la barra dei comandi. */
+#mobile-deck > .m-card {
+  flex-shrink: 0;
+}
+
 #mobile-deck .m-card {
   width: 100%;
   max-width: 520px;
@@ -843,8 +850,44 @@ body[data-scena="Game"] #mobile-deck {
 }
 
 #mobile-deck.bes-dislessia {
-  font-family: 'Comic Sans MS', Verdana, sans-serif;
+  font-family: 'Comic Sans MS', 'Comic Sans', Verdana, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
   letter-spacing: 1.2px;
+}
+
+/* Riscontro della prova in verticale (sostituisce i banner del canvas, nascosti) */
+#mobile-deck .m-feedback-box {
+  margin: 4px 0 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 3px solid #3aa564;
+  background: #effaf3;
+  text-align: center;
+  animation: m-feedback-in 0.18s ease-out;
+}
+#mobile-deck .m-feedback-box.is-bad {
+  border-color: #e05a5a;
+  background: #fff1f1;
+}
+#mobile-deck .m-feedback-title {
+  font-size: calc(20px * var(--m-font-scale, 1));
+  font-weight: 900;
+  color: #000000;
+  line-height: 1.2;
+}
+#mobile-deck .m-feedback-sub {
+  margin-top: 6px;
+  font-size: calc(14px * var(--m-font-scale, 1));
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.35;
+}
+#mobile-deck.bes-hc .m-feedback-box {
+  background: #ffffff;
+  border-color: #000000;
+}
+@keyframes m-feedback-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
 }
 
 #mobile-deck.bes-hc {
@@ -2025,4 +2068,29 @@ body[data-scena="Game"] #mobile-deck {
   font-size: 12.5px;
   font-weight: 800;
   color: #0369a1;
+}
+
+
+/* Orizzontale su schermi piccoli (telefono ruotato, 4:3 da 800 px): la barra con
+   le scritte copriva le risposte di sinistra. Restano solo le icone, sempre da
+   44 px; il significato resta nel tooltip e nell'etichetta accessibile. */
+@media (orientation: landscape) and (max-height: 500px), (orientation: landscape) and (max-width: 900px) {
+  #nav-gioco {
+    gap: 6px;
+  }
+  #nav-gioco .nav-bottone {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  #nav-gioco .nav-bottone .nav-testo {
+    display: none !important;
+  }
+  #nav-gioco .nav-bottone[data-azione="giocatore"] {
+    width: auto;
+    padding: 0 6px;
+  }
 }

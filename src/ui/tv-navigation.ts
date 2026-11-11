@@ -63,8 +63,12 @@ export class TVNavigationManager {
   }
 
   private handlePointerDown = (): void => {
-    // Se l'utente clicca col puntatore o tocca lo schermo su un dispositivo ibrido,
-    // manteniamo la logica ma non intralciamo il tocco
+    // Con mouse o dito l'anello di selezione non serve: sparisce finché non si
+    // torna a usare i tasti. Su Smart TV (solo telecomando) resta sempre attivo.
+    if (isSmartTV()) return;
+    this.active = false;
+    this.focusedItemId = null;
+    this.cleanupGfx();
   };
 
   /**
@@ -254,9 +258,9 @@ export class TVNavigationManager {
   private handleBackAction(scene: Phaser.Scene): void {
     const key = scene.scene.key;
     if (key === 'Game') {
-      // In gioco apre la pausa
-      const tastoP = scene.input.keyboard?.addKey('P');
-      tastoP?.emit('down');
+      // In gioco apre la pausa: la GameScene ascolta `keydown-ESC` sul plugin
+      // tastiera (l'evento nativo è stato fermato qui sopra, quindi va rilanciato).
+      scene.input.keyboard?.emit('keydown-ESC');
       return;
     }
 
@@ -558,13 +562,24 @@ export class TVNavigationManager {
     const scene = this.getActiveScene();
     if (!scene) return;
 
-    if (scene !== this.currentScene) {
+    if (!this.active) {
+      // Niente anello finché non si usano i tasti (vedi handlePointerDown).
+    } else if (scene !== this.currentScene) {
       const items = getMobileItems(scene).filter((i) => i.enabled());
       if (items.length > 0) {
         const def = this.pickDefaultItem(items, scene.scene.key);
         this.setFocus(scene, def);
       } else {
         this.cleanupGfx();
+      }
+    } else if (this.focusGfx) {
+      // Stessa scena ma l'elemento selezionato non c'è più (es. cambio prova
+      // nella GameScene): l'anello non deve restare a galleggiare nel vuoto.
+      const items = getMobileItems(scene).filter((i) => i.enabled());
+      const corrente = items.find((i) => i.id === this.focusedItemId);
+      if (!corrente) {
+        if (items.length > 0) this.setFocus(scene, this.pickDefaultItem(items, scene.scene.key));
+        else this.cleanupGfx();
       }
     }
 

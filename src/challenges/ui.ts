@@ -42,8 +42,24 @@ export interface FontSpec {
 /** Font in base alle regole BES (dislessia → Comic Sans + spaziatura). */
 export function fontSpec(cfg: EffectiveConfig): FontSpec {
   return cfg.font === 'dyslexia'
-    ? { family: '"Comic Sans MS", Verdana, sans-serif', spacing: 2 }
+    ? {
+        // Le emoji (🦊, 💡, ⚙️) non esistono in Comic Sans: senza i font emoji in
+        // coda il canvas disegnava dei quadratini al posto delle icone.
+        family:
+          '"Comic Sans MS", "Comic Sans", Verdana, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+        spacing: 2
+      }
     : { family: '"Arial Rounded MT Bold", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Trebuchet MS", Verdana, sans-serif', spacing: 0 };
+}
+
+/**
+ * Spaziatura lettere da usare per un testo. Phaser, con `letterSpacing > 0`,
+ * disegna i caratteri uno alla volta spezzando le emoji (coppie surrogate) in
+ * due quadratini: per i testi che contengono emoji la spaziatura resta 0.
+ */
+export function spaziaturaPer(spec: FontSpec, str: string): number {
+  if (spec.spacing === 0) return 0;
+  return /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/u.test(str) ? 0 : spec.spacing;
 }
 
 export interface TextOpts {
@@ -75,7 +91,13 @@ export function fitTextToBox(
 ): void {
   const rawSize = parseInt(String(t.style.fontSize), 10);
   let px = Number.isFinite(rawSize) && rawSize > 0 ? rawSize : 18;
-  while (px > minPx && (t.height > maxH || t.width > maxW + 6)) {
+  // Il padding interno (es. 8+8 / 4+4 px) serve solo a non tagliare i glifi:
+  // non è testo. Contarlo faceva rimpicciolire fino a 11 px anche etichette che
+  // ci stavano benissimo (contatore, titolo della tappa, stelle, sottotitoli).
+  const pad = (t as unknown as { padding?: { left?: number; right?: number; top?: number; bottom?: number } }).padding ?? {};
+  const padW = (pad.left ?? 0) + (pad.right ?? 0);
+  const padH = (pad.top ?? 0) + (pad.bottom ?? 0);
+  while (px > minPx && (t.height - padH > maxH || t.width - padW > maxW + 2)) {
     px -= 1;
     t.setFontSize(px);
     t.setLineSpacing(Math.max(1, Math.round(px * 0.12)));
@@ -109,7 +131,7 @@ export function makeText(
     color: colore,
     align: o.align ?? 'center',
     wordWrap: { width: wrapW, useAdvancedWrap: true },
-    letterSpacing: spec.spacing,
+    letterSpacing: spaziaturaPer(spec, str),
     lineSpacing: lineGap,
     padding: { left: 8, right: 8, top: 4, bottom: 4 }
   }).setOrigin(o.originX ?? 0.5, o.originY ?? 0.5);
@@ -297,6 +319,20 @@ const KIND_TEX: Record<BtnKind, string> = {
   unselected: 'btn-blue'
 };
 
+/** Stessi stati per il bottone "risposta lunga" (texture più grande). */
+const KIND_TEX_ANS: Record<BtnKind, string> = {
+  normal: 'btn-ans-blue',
+  correct: 'btn-ans-green',
+  selected: 'btn-ans-green',
+  wrong: 'btn-ans-red',
+  disabled: 'btn-ans-gray',
+  unselected: 'btn-ans-blue'
+};
+
+/** Larghezza/altezza della texture "risposta lunga". */
+export const BTN_ANS_W = 400;
+export const BTN_ANS_H = 76;
+
 /**
  * Bottone glossy Flash. Interattivo sul sprite (hit area centrata,
  * ampliata se `permissiveTouch` è attiva).
@@ -323,6 +359,10 @@ export function makeButton(
   const ts = Math.min(cfg.targetScale, o.maxTargetScale ?? defaultMaxTs);
   const s = ts * k;
   const initialTex = o.texture ?? 'btn-blue';
+  // Le texture di stato devono avere la stessa misura di quella iniziale,
+  // altrimenti un bottone largo diventerebbe piccolo quando cambia colore.
+  const mappaStati = initialTex.startsWith('btn-ans-') ? KIND_TEX_ANS : KIND_TEX;
+  const texPremuto = mappaStati.correct;
   const sprite = scene.add.sprite(0, 0, initialTex).setScale(s);
   const spec = fontSpec(cfg);
   const baseW = o.w ?? (sprite.width > 0 ? sprite.width : BTN_W);
@@ -337,7 +377,7 @@ export function makeButton(
     color: '#000000',
     align: 'center',
     wordWrap: { width: boxW, useAdvancedWrap: true },
-    letterSpacing: spec.spacing,
+    letterSpacing: spaziaturaPer(spec, label),
     padding: { left: 4, right: 4, top: 1, bottom: 1 }
   }).setOrigin(0.5);
 
@@ -355,9 +395,14 @@ export function makeButton(
   let enabled = true;
   let currentKind: BtnKind = 'normal';
   const tapCallbacks: Array<() => void> = [];
+  // Un tocco vale solo se è INIZIATO su questo bottone. Phaser riceve il
+  // rilascio del dito su tutta la finestra: in verticale il canvas (nascosto)
+  // sta sotto i bottoni HTML e senza questo controllo un tocco su "Gioca"
+  // poteva attivare anche il bottone invisibile sottostante (es. Impostazioni).
+  let premuto = false;
 
   const updateVisualState = () => {
-    const texKey = currentKind === 'normal' ? initialTex : (KIND_TEX[currentKind] ?? initialTex);
+    const texKey = currentKind === 'normal' ? initialTex : (mappaStati[currentKind] ?? initialTex);
     if (scene.textures.exists(texKey)) sprite.setTexture(texKey);
     if (currentKind === 'disabled' || currentKind === 'unselected') {
       text.setStyle({ color: '#475569', stroke: 'transparent', strokeThickness: 0 });
@@ -375,6 +420,7 @@ export function makeButton(
   });
 
   sprite.on('pointerout', () => {
+    premuto = false;
     if (!enabled) return;
     sprite.clearTint();
     root.setScale(1.0);
@@ -383,18 +429,20 @@ export function makeButton(
 
   sprite.on('pointerdown', () => {
     if (!enabled) return;
+    premuto = true;
     root.setScale(0.97);
-    if (scene.textures.exists('btn-green')) {
-      sprite.setTexture('btn-green');
+    if (scene.textures.exists(texPremuto)) {
+      sprite.setTexture(texPremuto);
     }
   });
 
   sprite.on('pointerup', () => {
-    if (!enabled) return;
+    if (!enabled || !premuto) return;
+    premuto = false;
     sprite.clearTint();
     root.setScale(1.0);
-    if (scene.textures.exists('btn-green')) {
-      sprite.setTexture('btn-green');
+    if (scene.textures.exists(texPremuto)) {
+      sprite.setTexture(texPremuto);
     }
     tapCallbacks.forEach((fn) => fn());
   });
@@ -406,13 +454,13 @@ export function makeButton(
     enabled: () => enabled && root.active && root.visible,
     x: () => root.x,
     y: () => root.y,
-    w: () => BTN_W * s,
-    h: () => BTN_H * s,
+    w: () => sprite.width * s,
+    h: () => sprite.height * s,
     texture: () => (sprite.texture?.key ? sprite.texture.key : initialTex),
     trigger: () => {
       if (enabled && root.active) {
-        if (scene.textures.exists('btn-green')) {
-          sprite.setTexture('btn-green');
+        if (scene.textures.exists(texPremuto)) {
+          sprite.setTexture(texPremuto);
         }
         tapCallbacks.forEach((fn) => fn());
       }
@@ -424,6 +472,7 @@ export function makeButton(
     text,
     setLabel(sLbl: string): void {
       text.setFontSize(baseFontPx);
+      text.setLetterSpacing(spaziaturaPer(spec, sLbl));
       text.setText(sLbl);
       fitTextToBox(text, boxW, boxH, 10);
     },
@@ -500,7 +549,7 @@ export function makeChip(
     color: '#000000',
     align: 'center',
     wordWrap: { width: boxW, useAdvancedWrap: true },
-    letterSpacing: spec.spacing,
+    letterSpacing: spaziaturaPer(spec, label),
     padding: { left: 6, right: 6, top: 2, bottom: 2 }
   }).setOrigin(0.5);
   const dpi = window.devicePixelRatio || 1;
@@ -517,8 +566,17 @@ export function makeChip(
   let enabled = true;
   let chipState: MobileItemState = 'normal';
   const tapCallbacks: Array<() => void> = [];
+  // Come per i bottoni: vale solo il tocco iniziato su questa tessera.
+  // (Durante un trascinamento la tessera segue il dito, quindi il rilascio
+  // avviene ancora sopra di lei.)
+  let premuto = false;
+  sprite.on('pointerdown', () => {
+    premuto = true;
+  });
   sprite.on('pointerup', () => {
-    if (enabled) tapCallbacks.forEach((fn) => fn());
+    const valido = premuto;
+    premuto = false;
+    if (enabled && valido) tapCallbacks.forEach((fn) => fn());
   });
   const unregister = registerMobileItem(scene, {
     kind: 'chip',
@@ -721,7 +779,18 @@ export function makeToggle(
 
   const zona = scene.add.zone(x, y, w, h).setInteractive({ useHandCursor: true });
   zona.setDepth(70);
-  zona.on('pointerup', onTap);
+  let premuto = false;
+  zona.on('pointerdown', () => {
+    premuto = true;
+  });
+  zona.on('pointerout', () => {
+    premuto = false;
+  });
+  zona.on('pointerup', () => {
+    if (!premuto) return;
+    premuto = false;
+    onTap();
+  });
   const unregister = registerMobileItem(scene, {
     kind: 'toggle',
     label: () => label,
@@ -777,7 +846,7 @@ export function showBanner(
       color: '#000000',
       align: 'center',
       wordWrap: { width: w - 64, useAdvancedWrap: true },
-      letterSpacing: spec.spacing,
+      letterSpacing: spaziaturaPer(spec, text),
       padding: { left: 8, right: 8, top: 4, bottom: 4 }
     })
     .setOrigin(0.5)
@@ -794,7 +863,7 @@ export function showBanner(
         color: '#1e293b',
         align: 'center',
         wordWrap: { width: w - 64, useAdvancedWrap: true },
-        letterSpacing: spec.spacing,
+        letterSpacing: spaziaturaPer(spec, sub),
         padding: { left: 8, right: 8, top: 4, bottom: 4 }
       })
       .setOrigin(0.5)

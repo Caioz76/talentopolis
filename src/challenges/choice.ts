@@ -30,6 +30,19 @@ import {
 
 type ChoiceRound = QuizRound | ImageRound;
 
+/** Due colonne di bottoni larghi (400×76 × 0.92), tra x≈163 e x≈941. */
+function layoutRisposteLunghe(n: number): [number, number][] {
+  const sx = 347;
+  const dx = 757;
+  const centro = 552;
+  const y1 = 304;
+  const y2 = 398;
+  if (n <= 1) return [[centro, y1]];
+  if (n === 2) return [[sx, y1], [dx, y1]];
+  if (n === 3) return [[sx, y1], [dx, y1], [centro, y2]];
+  return [[sx, y1], [dx, y1], [sx, y2], [dx, y2]];
+}
+
 export class ChoiceChallenge implements Challenge {
   private scene: Phaser.Scene;
   private round: ChoiceRound;
@@ -95,14 +108,19 @@ export class ChoiceChallenge implements Challenge {
     this.options = fitOptions(round.options, cfg.maxOptions);
     const options = this.options;
     const scale = cfg.targetScale;
-    const pos = optionLayout(options.length, scale, cx);
+    // Risposte lunghe (spiegazioni, definizioni): nel bottone standard si
+    // riducevano a 10 px, illeggibili. Si passa a bottoni larghi a due colonne,
+    // spostati a destra per lasciare libera la barra Pausa/Esci.
+    const lunghe = options.some((o) => o.label.length > 30);
+    const pos = lunghe ? layoutRisposteLunghe(options.length) : optionLayout(options.length, scale, cx);
 
     options.forEach((opt, i) => {
       const [px, py] = pos[i];
       const b = makeButton(scene, cfg, px, py + yShift, opt.label, {
         scale: 0.92,
-        maxTargetScale: 1.04,
-        depth: 10
+        maxTargetScale: lunghe ? 1.0 : 1.04,
+        depth: 10,
+        ...(lunghe ? { texture: 'btn-ans-blue' } : {})
       });
       b.onTap(() => this.onPick(i));
       this.btns.push(b);

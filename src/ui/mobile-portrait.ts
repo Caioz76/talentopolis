@@ -25,6 +25,7 @@ import {
   openPlayerSelectionDialog
 } from '../core/player';
 import { totalStarsForPlayer } from '../core/progress';
+import { BES_PROFILES } from '../bes/profiles';
 import { toggleFullscreen } from './fullscreen';
 import { isSmartTV, isSmartphone } from './device';
 export { isSmartTV, isSmartphone };
@@ -33,6 +34,8 @@ interface TextEntry {
   text: string;
   x: number;
   y: number;
+  /** Profondità Phaser: i banner di feedback stanno a 300+. */
+  depth: number;
 }
 
 const origAlphaMap = new WeakMap<object, number>();
@@ -102,6 +105,7 @@ function raccogliTesti(scene: Phaser.Scene | null): TextEntry[] {
       text?: string;
       x?: number;
       y?: number;
+      depth?: number;
       visible?: boolean;
       parentContainer?: unknown;
       list?: unknown[];
@@ -109,7 +113,7 @@ function raccogliTesti(scene: Phaser.Scene | null): TextEntry[] {
     if (!n || n.visible === false) return;
     if (n.type === 'Text' && n.text && !n.parentContainer) {
       const t = String(n.text).trim();
-      if (t) out.push({ text: t, x: n.x ?? 0, y: n.y ?? 0 });
+      if (t) out.push({ text: t, x: n.x ?? 0, y: n.y ?? 0, depth: n.depth ?? 0 });
     }
     if (n.list) n.list.forEach(walk);
   };
@@ -196,6 +200,16 @@ export function initMobilePortrait(game: Phaser.Game): void {
     const key = scena?.scene.key ?? 'Boot';
     document.body.dataset.scena = key;
 
+    // In verticale l'interfaccia è tutta HTML e quella Phaser è invisibile:
+    // il puntatore di Phaser va spento. Phaser ascolta pressioni e rilasci anche
+    // fuori dal canvas (eventi di finestra) e, senza questo, un tocco su un
+    // bottone HTML attivava anche il bottone invisibile che stava sotto
+    // (es. "Gioca" → "Impostazioni" su iPhone SE con testo grande).
+    const inputPhaser = !verticale || key === 'Boot';
+    for (const s of attive) {
+      if (s.input && s.input.enabled !== inputPhaser) s.input.enabled = inputPhaser;
+    }
+
     if (!verticale) {
       sincronizzaVisibilitaCanvas(scena, false);
       if (deck.style.display !== 'none') {
@@ -221,7 +235,7 @@ export function initMobilePortrait(game: Phaser.Game): void {
     const gameScena = scena as { roundPlayer?: import('../core/player').ActivePlayer } | null;
     const activePlayer = gameScena?.roundPlayer;
     const playerProfileId = activePlayer ? (activePlayer.profileId ?? impostazioni.profileId ?? null) : impostazioni.profileId;
-    const playerOverrides = activePlayer?.overrides ?? impostazioni.overrides ?? {};
+    const playerOverrides = { ...(impostazioni.overrides ?? {}), ...(activePlayer?.overrides ?? {}) };
     const cfg = resolveConfig({
       ...impostazioni,
       profileId: playerProfileId,
@@ -285,6 +299,15 @@ export function initMobilePortrait(game: Phaser.Game): void {
     aggiorna();
   });
   window.setInterval(aggiorna, 250);
+  // Anche a ogni fotogramma: una scena appena aperta non deve restare
+  // "toccabile" per i 250 ms che mancano al prossimo aggiornamento.
+  game.events.on('prestep', () => {
+    if (!document.body.classList.contains('verticale')) return;
+    const attive = game.scene.getScenes(true);
+    const top = attive[attive.length - 1];
+    if (!top || top.scene.key === 'Boot') return;
+    for (const s of attive) if (s.input && s.input.enabled) s.input.enabled = false;
+  });
   aggiorna();
 }
 
@@ -612,7 +635,7 @@ function renderSettings(deck: HTMLElement, items: MobileItem[], testi: TextEntry
       card.appendChild(pRow);
     }
 
-    const custom = buttons.find((b) => b.label().includes('Personalizza Caratteristiche'));
+    const custom = buttons.find((b) => b.label().startsWith('Personalizza'));
     if (custom) {
       const cWrap = document.createElement('div');
       cWrap.style.margin = '10px 0';
@@ -625,10 +648,9 @@ function renderSettings(deck: HTMLElement, items: MobileItem[], testi: TextEntry
       card.appendChild(creaBtnDom(standard, 'm-btn-compact'));
     }
 
-    const BES_LABELS = [
-      'ADHD', 'Autismo', 'Dislessia', 'Discalculia',
-      'Disgrafia', 'Disprassia', 'Ipovisione', 'Sordità', 'DSA / Ansia'
-    ];
+    // Le etichette vengono dall'elenco vero dei profili: la lista scritta a mano
+    // conteneva "Ipovisione" (che non esiste) e dimenticava "Disabilità intellettiva".
+    const BES_LABELS = BES_PROFILES.map((p) => p.label);
     const profili = buttons.filter((b) => BES_LABELS.includes(b.label()));
     if (profili.length > 0) {
       const lbl = document.createElement('div');
@@ -1052,8 +1074,25 @@ function renderGame(
   }
 
   // Domanda (prompt) e indizio
-  const prompt = testi.find((t) => Math.abs(t.y - 66) < 20);
+  const prompt = testi.find((t) => Math.abs(t.y - 66) < 20 && t.depth < 300);
   const hint = testi.find((t) => t.text.startsWith('💡'));
+
+  // Feedback (banner Phaser a profondità 300+): in verticale il canvas è
+  // nascosto, quindi "Giusto!", "Riprova" e la spiegazione vanno ridisegnati qui,
+  // altrimenti il bambino non riceve alcun riscontro sull'errore.
+  const banner = testi.filter((t) => t.depth >= 300).sort((a, b) => a.y - b.y);
+  if (banner.length > 0) {
+    const titolo = banner[0].text;
+    const positivo = /giusto|completat|pronti|bravissim/i.test(titolo);
+    const fb = document.createElement('div');
+    fb.className = `m-feedback-box ${positivo ? 'is-ok' : 'is-bad'}`;
+    fb.setAttribute('role', 'status');
+    fb.setAttribute('aria-live', 'polite');
+    fb.innerHTML = `<div class="m-feedback-title">${titolo}</div>${
+      banner.length > 1 ? `<div class="m-feedback-sub">${banner.slice(1).map((b) => b.text).join(' ')}</div>` : ''
+    }`;
+    card.appendChild(fb);
+  }
   const rileggi = items.find((i) => i.kind === 'button' && i.label() === 'Rileggi');
 
   if (prompt || rileggi) {
@@ -1117,8 +1156,15 @@ function renderGame(
     const midX = scena ? scena.scale.gameSize.width / 2 : 512;
     const sinistre = chips.filter((c) => c.x() < midX).sort((a, b) => a.y() - b.y());
     const destre = chips.filter((c) => c.x() >= midX).sort((a, b) => a.y() - b.y());
+    // Il tipo di prova si legge dalla scena, non si indovina dalla posizione:
+    // un riordino da 4 tessere ha 2 tessere a sinistra e 2 a destra del centro
+    // e veniva scambiato per un abbinamento (niente caselle, istruzioni sbagliate).
+    const prova = (scena as { roundAttivo?: import('../content/types').Round } | null)?.roundAttivo;
+    const abbinamento = prova
+      ? prova.type === 'dragdrop' && prova.mode === 'match'
+      : sinistre.length > 0 && destre.length === sinistre.length;
 
-    if (sinistre.length > 0 && destre.length === sinistre.length) {
+    if (abbinamento) {
       const instr = document.createElement('div');
       instr.className = 'm-sub';
       instr.textContent = 'Tocca un elemento a sinistra e poi il suo compagno a destra:';

@@ -271,7 +271,7 @@ export class SettingsScene extends Phaser.Scene {
       cfg,
       w / 2,
       customY,
-      'Personalizza Caratteristiche (Custom)',
+      'Personalizza (Custom)',
       { scale: 0.70, maxTargetScale: 1.02, depth: 10 }
     );
     btnCustom.onTap(() => {
@@ -456,7 +456,7 @@ export class SettingsScene extends Phaser.Scene {
       220,
       'Dalla 1ª alla 5ª Primaria · Esercizi graduati per bambini dai 6 ai 10 anni',
       cfg,
-      { size: 13, bold: true, color: '#102a43', wrap: 720, maxH: 20 }
+      { size: 13, bold: true, color: '#102a43', wrap: 720, maxH: 40 }
     );
 
     // ── Ramo Secondaria ──
@@ -480,7 +480,7 @@ export class SettingsScene extends Phaser.Scene {
       350,
       'Dalla 1ª alla 3ª Secondaria · Quesiti logici e di comprensione per ragazzi dagli 11 ai 14 anni',
       cfg,
-      { size: 13, bold: true, color: '#102a43', wrap: 720, maxH: 20 }
+      { size: 13, bold: true, color: '#102a43', wrap: 720, maxH: 40 }
     );
 
     // ── Bottom Nav ──

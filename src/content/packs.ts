@@ -970,7 +970,7 @@ export function getActiveRounds(): Round[] {
 }
 
 /**
- * Seleziona le 6 prove per la partita:
+ * Seleziona le prove per la partita (6 per un giocatore; in squadra almeno 2 a testa):
  * - garantisce la STRETTA coerenza con l'anno scolastico attivo (`settings.schoolYear`):
  *   i quesiti sono rigorosamente calibrati per l'anno dell'alunno (né più semplici, né più complessi);
  * - include i quesiti originali della tappa solo se compatibili con il grado dell'alunno;
@@ -980,7 +980,8 @@ export function getActiveRounds(): Round[] {
 export function selectRoundsForGame(
   pack: Pack,
   level: Level,
-  settings: BesSettings
+  settings: BesSettings,
+  quante = 6
 ): Round[] {
   const anno = normalizzaAnno(settings.schoolYear);
   const compatibili = LEVEL_YEARS_COMPATIBILITY[level.id]?.includes(anno) ?? false;
@@ -990,13 +991,16 @@ export function selectRoundsForGame(
     .map((t) => t.round);
 
   if (settings.randomQuestions === false) {
-    if (compatibili && level.rounds.length >= 6) {
-      proveAttive = level.rounds.slice(0, 6);
+    if (compatibili && level.rounds.length >= quante) {
+      proveAttive = level.rounds.slice(0, quante);
+    } else if (compatibili && level.rounds.length > 0 && extra.length > 0) {
+      const ids = new Set(level.rounds.map((r) => r.id));
+      proveAttive = [...level.rounds, ...extra.filter((r) => !ids.has(r.id))].slice(0, quante);
     } else {
       const levelIdx = Math.max(0, pack.levels.findIndex((l) => l.id === level.id));
-      const start = (levelIdx * 6) % Math.max(1, extra.length);
-      const slice = extra.slice(start, start + 6);
-      proveAttive = slice.length >= 6 ? slice : extra.slice(0, 6);
+      const start = (levelIdx * quante) % Math.max(1, extra.length);
+      const slice = extra.slice(start, start + quante);
+      proveAttive = slice.length >= quante ? slice : extra.slice(0, quante);
     }
     return proveAttive;
   }
@@ -1019,7 +1023,7 @@ export function selectRoundsForGame(
   const maiVisti = tutti.filter((r) => !vistiSet.has(r.id));
 
   let disponibili: Round[];
-  if (maiVisti.length >= 6) {
+  if (maiVisti.length >= quante) {
     // Il bacino ha abbondanti quesiti del tutto freschi
     disponibili = maiVisti;
   } else {
@@ -1043,31 +1047,31 @@ export function selectRoundsForGame(
 
   // Seleziona fino a 2 interattive se disponibili e fresche, altrimenti completa con scelte
   const nInter = Math.min(interattiveFresche.length, 2);
-  const nScelte = 6 - nInter;
+  const nScelte = quante - nInter;
 
   const selezionateScelte = scelteFresche.slice(0, nScelte);
-  const selezionateInter = interattiveFresche.slice(0, 6 - selezionateScelte.length);
+  const selezionateInter = interattiveFresche.slice(0, quante - selezionateScelte.length);
 
   const risultato: Round[] = [...selezionateScelte, ...selezionateInter];
 
   // Se non siamo arrivati a 6 (ad esempio se mancavano interattive), completa con scelte fresche
-  if (risultato.length < 6) {
+  if (risultato.length < quante) {
     const giaIncluso = new Set(risultato.map((r) => r.id));
     for (const r of scelteFresche) {
       if (!giaIncluso.has(r.id)) {
         risultato.push(r);
-        if (risultato.length === 6) break;
+        if (risultato.length === quante) break;
       }
     }
   }
 
   // Se ancora non si è a 6, completa con qualsiasi disponibile non ancora incluso
-  if (risultato.length < 6) {
+  if (risultato.length < quante) {
     const giaIncluso = new Set(risultato.map((r) => r.id));
     for (const r of disponibili) {
       if (!giaIncluso.has(r.id)) {
         risultato.push(r);
-        if (risultato.length === 6) break;
+        if (risultato.length === quante) break;
       }
     }
   }
@@ -1078,6 +1082,6 @@ export function selectRoundsForGame(
     risultato.map((r) => r.id)
   );
 
-  proveAttive = risultato.slice(0, 6);
+  proveAttive = risultato.slice(0, quante);
   return proveAttive;
 }
