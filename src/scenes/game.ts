@@ -26,6 +26,8 @@ export interface PlayerRoundStat {
 export class GameScene extends Phaser.Scene {
   public roundPlayer?: ActivePlayer;
   public team?: TeamSetup;
+  /** Prova in corso: serve all'interfaccia verticale per sapere che tipo di prova disegnare. */
+  public roundAttivo?: Round;
 
   constructor() {
     super('Game');
@@ -52,15 +54,10 @@ export class GameScene extends Phaser.Scene {
 
     // Estrazione delle prove della partita (casuale dal bacino dell'anno scolastico,
     // oppure fissa se randomQuestions === false).
-    let rounds = selectRoundsForGame(pack, level, impostazioni);
-    if (team.numPlayers > 1) {
-      // Assicura che ogni giocatore abbia lo stesso numero di turni (sessione equilibrata)
-      const turnsPerPlayer = Math.max(1, Math.floor(rounds.length / team.numPlayers));
-      const totalRounds = turnsPerPlayer * team.numPlayers;
-      if (rounds.length >= totalRounds && totalRounds >= team.numPlayers) {
-        rounds = rounds.slice(0, totalRounds);
-      }
-    }
+    // In squadra ogni giocatore ha lo stesso numero di turni e almeno 2 prove
+    // (con 4 giocatori prima ne aveva una sola: troppo poco per meritare stelle).
+    const turniPerGiocatore = team.numPlayers > 1 ? Math.max(2, Math.floor(6 / team.numPlayers)) : 6;
+    const rounds = selectRoundsForGame(pack, level, impostazioni, turniPerGiocatore * team.numPlayers);
 
     const playerStats: Record<number, PlayerRoundStat> = {};
     team.players.forEach((p) => {
@@ -84,7 +81,9 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.gameSize.width;
 
     // Barra superiore e quadro domanda in stile Sport (in 2D o capsula dedicata in 3D)
-    const frameW = Math.min(832, w - 40);
+    // In 3D la capsula è più stretta: a destra c'è l'HUD HTML (cuori, stelle,
+    // punti) che altrimenti coprirebbe il contatore "Prova x/6".
+    const frameW = Math.min(treD ? 640 : 832, w - 40);
     const frameX = (w - frameW) / 2;
     if (!treD) {
       drawSportChannelFrame(this, cfg, { x: frameX, y: 6, w: frameW, h: 124, headerH: 34, depth: -10 });
@@ -266,10 +265,12 @@ export class GameScene extends Phaser.Scene {
       playerStats[roundPlayer.playerIndex].roundsPlayed += 1;
 
       const playerProfileId = roundPlayer.profileId ?? impostazioni.profileId ?? null;
+      // Le regole personalizzate globali (pannello "Custom") valgono per tutti;
+      // quelle specifiche del giocatore, se presenti, si sommano sopra.
       const roundCfg = resolveConfig({
         ...impostazioni,
         profileId: playerProfileId,
-        overrides: roundPlayer.overrides ?? impostazioni.overrides ?? {}
+        overrides: { ...(impostazioni.overrides ?? {}), ...(roundPlayer.overrides ?? {}) }
       });
       const roundRitmo = roundCfg.slowPace ? 1.6 : 1;
 
@@ -293,6 +294,7 @@ export class GameScene extends Phaser.Scene {
       world.mostraCheckpoint?.(index + 1, rounds.length);
 
       const round: Round = rounds[index];
+      this.roundAttivo = round;
       guidaPico?.setText(`🎯 ${roundPlayer.token.icon} ${roundPlayer.token.name}: ${testoGuidaPer(round)}`);
 
       const scelta = round.type === 'quiz' || round.type === 'image';
@@ -339,15 +341,20 @@ export class GameScene extends Phaser.Scene {
           errori += 1;
           guidaPico?.setText('Pico: Niente paura, riprova con calma!');
           world.bloccaCheckpoint?.();
-          const no = showBanner(
-            this,
-            roundCfg,
-            'Riprova',
-            attempts >= 2 ? 'Guarda bene le opzioni.' : null,
-            'bad',
-            { y: bannerY }
-          );
-          this.time.delayedCall(900 * roundRitmo, () => no.dispose());
+          // Con "Spiegazione dopo l'errore" la prova a scelta mostra già il suo
+          // banner con la spiegazione nello stesso punto: non se ne sovrappone un altro.
+          const spiegaGia = scelta && roundCfg.showExplanationOnWrong && Boolean(round.explanation) && attempts < 3;
+          if (!spiegaGia) {
+            const no = showBanner(
+              this,
+              roundCfg,
+              'Riprova',
+              attempts >= 2 ? 'Guarda bene le opzioni.' : null,
+              'bad',
+              { y: bannerY }
+            );
+            this.time.delayedCall(900 * roundRitmo, () => no.dispose());
+          }
           if (attempts >= 3) {
             index += 1;
             outcomes.push({ roundId: round.id, correct: false, attempts: errori, timeMs: 0 });

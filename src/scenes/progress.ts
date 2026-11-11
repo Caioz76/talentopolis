@@ -172,7 +172,19 @@ export class ProgressScene extends Phaser.Scene {
       depth: 10
     });
     btnAzzera.setKind('wrong');
+    // Due tocchi: il primo chiede conferma, il secondo (entro 4 s) azzera davvero.
+    let confermaAzzera = false;
     btnAzzera.onTap(() => {
+      if (!confermaAzzera) {
+        confermaAzzera = true;
+        btnAzzera.setLabel('Sicuro? Tocca di nuovo');
+        this.time.delayedCall(4000, () => {
+          if (!confermaAzzera || !btnAzzera.root.active) return;
+          confermaAzzera = false;
+          btnAzzera.setLabel('🗑️ Azzera progressi');
+        });
+        return;
+      }
       resetAllProgress();
       this.scene.restart();
     });

@@ -31,9 +31,10 @@ import {
 
 type MatchRound = Extract<DragDropRound, { mode: 'match' }>;
 
-const LEFT_X = 276;
-const RIGHT_X = 748;
-const CHIP_W = 264;
+const LEFT_X = 312;
+const RIGHT_X = 712;
+/** Più stretta di prima: la colonna sinistra resta libera per la barra Pausa/Esci. */
+const CHIP_W = 236;
 
 /** Righe verticali comprese tra 198 e 442 (lasciano spazio a prompt, indizio, istruzione e terra). */
 function rowsY(n: number): number[] {
@@ -84,8 +85,8 @@ export class MatchChallenge implements Challenge {
     this.cb = cb;
 
     const cx = scene.scale.gameSize.width / 2;
-    this.leftX = cx - 236;
-    this.rightX = cx + 236;
+    this.leftX = cx - (512 - LEFT_X);
+    this.rightX = cx + (RIGHT_X - 512);
 
     const left = round.leftItems ?? [];
     const right = round.rightItems ?? [];

@@ -110,7 +110,7 @@ test('accendo "Pausa quando serve" senza profilo e la regola agisce davvero', as
   await expect.poll(() => scena(page)).toBe('Settings');
 
   expect(await toccaTesto(page, 'Bisogni Educativi Speciali')).toBe(true);
-  expect(await toccaTesto(page, 'Personalizza Caratteristiche')).toBe(true);
+  expect(await toccaTesto(page, 'Personalizza (Custom)')).toBe(true);
   await expect.poll(() => scena(page)).toBe('Settings');
   expect((await testi(page)).map((t) => t.text)).toContain('Pausa quando serve');
 

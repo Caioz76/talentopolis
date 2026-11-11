@@ -181,9 +181,10 @@ export class TitleScene extends Phaser.Scene {
     // ── Riga 1, Colonna Sinistra: Selezione Squadra / Giocatori (Contorno Azzurro) ──
     const getBtnGiocatoriLabel = () => {
       const team = getTeamSetup();
+      // In squadra il riepilogo completo non entra nel bottone: solo le icone.
       return team.numPlayers === 1
         ? getPlayerSummary()
-        : `👥 ${team.numPlayers} Giocatori (${getPlayerSummary()})`;
+        : `👥 ${team.numPlayers} Giocatori · ${team.players.map((p) => p.token.icon).join(' ')}`;
     };
 
     const btnGiocatori = makeButton(

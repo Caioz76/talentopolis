@@ -167,6 +167,16 @@ async function attendiFermata(page: Page): Promise<void> {
 async function avviaMatematica(page: Page): Promise<void> {
   await page.goto('/');
   await expect.poll(() => scena(page)).toBe('Title');
+  // In verticale il canvas non riceve i tocchi (li prende l'interfaccia HTML
+  // `#mobile-deck`): si usano i suoi bottoni, come farebbe un bambino.
+  const verticale = await page.evaluate(() => document.body.classList.contains('verticale'));
+  if (verticale) {
+    await page.locator('#mobile-deck button', { hasText: /^Gioca$/ }).click();
+    await expect.poll(() => scena(page)).toBe('Subject');
+    await page.locator('#mobile-deck button', { hasText: 'Matematica' }).click();
+    await expect.poll(() => scena(page)).toBe('Game');
+    return;
+  }
   await tocco(page, 640, 368); // Gioca
   await expect.poll(() => scena(page)).toBe('Subject');
   await tocco(page, 322, 248, 120); // Matematica (senza perdere l'avvicinamento)

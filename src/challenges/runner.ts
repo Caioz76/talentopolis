@@ -36,6 +36,7 @@ import {
   makeText,
   registerMobileItem,
   showBanner,
+  spaziaturaPer,
   testoSemplice,
   type Btn,
   type Challenge,
@@ -94,7 +95,7 @@ function makeSign(
       color: cfg.highContrast ? '#000000' : T.body,
       align: 'center',
       wordWrap: { width: w - 34, useAdvancedWrap: true },
-      letterSpacing: spec.spacing
+      letterSpacing: spaziaturaPer(spec, label)
     })
     .setOrigin(0.5);
   text.setResolution(Math.max(window.devicePixelRatio || 1, 2));
@@ -138,8 +139,17 @@ function makeSign(
   let enabled = true;
   let currentKind: Kind = 'normal';
   const tapCallbacks: Array<() => void> = [];
+  let premuto = false;
+  root.on('pointerdown', () => {
+    premuto = true;
+  });
+  root.on('pointerout', () => {
+    premuto = false;
+  });
   root.on('pointerup', () => {
-    if (enabled) tapCallbacks.forEach((fn) => fn());
+    const valido = premuto;
+    premuto = false;
+    if (enabled && valido) tapCallbacks.forEach((fn) => fn());
   });
   const unregister = registerMobileItem(scene, {
     kind: 'sign',
